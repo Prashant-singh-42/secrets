@@ -4,12 +4,15 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const ejs = require('ejs');
-const encryption = require('mongoose-encryption');
+const bcrypt = require('bcrypt');
+// const encryption = require('mongoose-encryption');
+// const md5 = require('md5');
+
+
+const saltRounds = 10;
 
 
 const app = express();
-// console.log(process.env.API_KEY);
-
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(express.static("public"));
@@ -24,7 +27,7 @@ const userSchema =  new mongoose.Schema({
 });
 
 
-userSchema.plugin(encryption, {secret: process.env.SECRET, encryptedFields: ["password"]});
+// userSchema.plugin(encryption, {secret: process.env.SECRET, encryptedFields: ["password"]});
 
 const User = new mongoose.model("User", userSchema);
 
@@ -41,18 +44,28 @@ app.get("/register",function(req, res){
   res.render("register");
 });
 
+app.get("/logout",function(req, res){
+  res.redirect("/");
+});
+
 app.post("/register",function(req, res){
-  const newUser = new User({
-    email: req.body.username,
-    password: req.body.password
+
+  bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+    const newUser = new User({
+      email: req.body.username,
+      password: hash
+    });
+    newUser.save(function(err){
+      if (!err) {
+        res.render("secrets");
+      } else {
+        console.log(err);
+      }
+    });
   });
-  newUser.save(function(err){
-    if (!err) {
-      res.render("secrets");
-    } else {
-      console.log(err);
-    }
-  });
+
+
+
 });
 
 app.post("/login", function(req,res){
@@ -61,11 +74,13 @@ app.post("/login", function(req,res){
 
   User.findOne({email: email}, function(err, foundddocs){
     if (foundddocs){
-      if (password === foundddocs.password){
-        res.render("secrets");
-      } else {
-        res.send("wrong password");
-      }
+      bcrypt.compare(password, foundddocs.password, function(err, result) {
+        if (result=== true) {
+          res.render("secrets");
+        } else {
+          res.send("incorrect password");
+        }
+      });
     } else {
       res.send("email not found");
     }
